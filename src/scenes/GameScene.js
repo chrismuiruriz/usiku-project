@@ -88,7 +88,7 @@ class GameScene extends Phaser.Scene {
       width: bg.displayWidth,
     });
 
-    this.blockGrid.showNumbers();
+    //this.blockGrid.showNumbers();
 
     //this.makeFloor(396, 417, BLOCK_KEY);
     this.cameras.main.setBounds(0, 0, bg.displayWidth, bg.displayHeight);
