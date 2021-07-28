@@ -2,15 +2,14 @@ import Phaser from "phaser";
 
 //assets
 import SkyImg from "../assets/sky.png";
-import GroundImg from "../assets/platform.png";
 import StarImg from "../assets/star.png";
 import BombImg from "../assets/bomb.png";
 
 import BrickBrownImg from "../assets/tiles/brickBrown.png";
 import BrickGreyImg from "../assets/tiles/brickGrey.png";
 
+//the hero
 import DudeImg from "../assets/dude.png";
-import BlockImg from "../assets/tiles/brickBrown.png";
 
 import LadderImg from "../assets/objects/ladder.png";
 import BackgroundImg from "../assets/background.png";
@@ -23,10 +22,8 @@ import Align from "../utils/Align";
 
 //consts
 const DUDE_KEY = "dude";
-const GROUND_KEY = "ground";
 const STAR_KEY = "star";
 const BOMB_KEY = "bomb";
-const BLOCK_KEY = "block";
 const LADDER_KEY = "ladder";
 const BACKGROUND_KEY = "background";
 
@@ -52,7 +49,6 @@ class GameScene extends Phaser.Scene {
 
   preload() {
     this.load.image("sky", SkyImg);
-    this.load.image(GROUND_KEY, GroundImg);
     this.load.image(STAR_KEY, StarImg);
     this.load.image(BOMB_KEY, BombImg);
 
@@ -64,22 +60,26 @@ class GameScene extends Phaser.Scene {
     this.load.image("brown", BrickBrownImg);
     this.load.image("grey", BrickGreyImg);
 
-    //this.load.image(BLOCK_KEY, BlockImg);
     this.load.image(BACKGROUND_KEY, BackgroundImg);
     this.load.image(LADDER_KEY, LadderImg);
   }
 
   create() {
-    this.align = new Align(this);
+    this.align = new Align(this); //magic toolkit to align objs in the grid
+    //the background image
     let bg = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0, 0);
     this.align.scaleToGameW(bg, 2);
 
+    //set the world bounds to the size of the bg image
     this.physics.world.setBounds(0, 0, bg.displayWidth, bg.displayHeight);
 
-    this.brickGroup = this.physics.add.group();
-    this.ladderGroup = this.physics.add.group();
+    this.brickGroup = this.physics.add.group(); //a ground for the bricks
+    this.ladderGroup = this.physics.add.group(); //a group for the ladders
+
+    //let's create our hero
     this.player = this.createPlayer();
 
+    //a kit to generate a grid to assist in obj alignment
     this.blockGrid = new AlignGrid(this, {
       scene: this,
       rows: 22,
@@ -88,32 +88,32 @@ class GameScene extends Phaser.Scene {
       width: bg.displayWidth,
     });
 
+    //use this to see grid lines and numbers
     //this.blockGrid.showNumbers();
 
-    //this.makeFloor(396, 417, BLOCK_KEY);
+    //we want the camera to follow our hero
     this.cameras.main.setBounds(0, 0, bg.displayWidth, bg.displayHeight);
     this.cameras.main.startFollow(this.player);
     this.player.setDepth(10000);
 
-    //this.makeFloor(440, 490, "brown");
-
-    //const platforms = this.createPlatforms();
-    //this.player = this.createPlayer();
+    //let's load some starts
     this.stars = this.createStars();
 
-    this.makeObjs();
+    this.makeObjs(); //a func to create laddrs
+    this.makePlats(); //a func to create platforms
 
-    this.makePlats();
+    //what happens when our hero collides with a brick
     this.physics.add.collider(
       this.player,
       this.brickGroup,
       null,
       this.checkUp.bind(this)
     );
+    //make hero and ladders to overlap
     this.physics.add.overlap(this.player, this.ladderGroup);
 
+    //a simple score board for illustration purposes
     this.scoreLabel = this.createScoreLabel(10, 10, 0);
-    //this.blockGrid.placeAtIndex(67, this.scoreLabel);
     this.scoreLabel.setScrollFactor(0);
     this.align.scaleToGameW(this.scoreLabel, 0.25);
 
@@ -122,7 +122,6 @@ class GameScene extends Phaser.Scene {
     const bombGroup = this.bombSpawner.group;
 
     // //add collition
-    // this.physics.add.collider(this.player, platforms);
     this.physics.add.collider(this.stars, this.brickGroup);
     this.physics.add.collider(bombGroup, this.brickGroup);
     this.physics.add.collider(this.player, bombGroup, this.hitBomb, null, this);
@@ -208,12 +207,12 @@ class GameScene extends Phaser.Scene {
   }
 
   update() {
-    let xVelocity = 160;
+    let xVelocity = 150;
     let yVelocity = -150;
 
-    if (this.isMobileDevice) {
+    if (this.isMobileDevice()) {
       xVelocity = 250;
-      yVelocity = -270;
+      yVelocity = -250;
     }
     if (this.gameOver) {
       return;
@@ -230,8 +229,7 @@ class GameScene extends Phaser.Scene {
     }
     if (this.cursors.up.isDown) {
       this.checkLadder();
-      if (this.onLadder 
-        == true) {
+      if (this.onLadder == true) {
         this.player.setVelocityY(yVelocity);
       } else if (this.player.body.touching.down) {
         this.player.setVelocityY(yVelocity);
@@ -242,31 +240,27 @@ class GameScene extends Phaser.Scene {
   //returns true if mobile device
   isMobileDevice() {
     if (navigator.userAgent.indexOf("Mobile") == -1) {
+      console.log(`is not mobile`);
       return false;
     }
+    console.log(`is mobile`);
     return true;
-  }
-
-  //creates the ground
-  createPlatforms() {
-    const platforms = this.physics.add.staticGroup();
-    platforms.create(400, 568, GROUND_KEY).setScale(2).refreshBody();
-
-    platforms.create(600, 400, GROUND_KEY);
-    platforms.create(50, 250, GROUND_KEY);
-    platforms.create(750, 220, GROUND_KEY);
-
-    return platforms;
   }
 
   //creates the player
   createPlayer() {
+    let yGravity = 150;
+
+    if (this.isMobileDevice) {
+      yGravity = 250;
+    }
+
     const player = this.physics.add.sprite(50, 450, DUDE_KEY);
     player.setBounce(0.1);
     player.setCollideWorldBounds(true);
 
     this.align.scaleToGameW(player, 0.1);
-    player.setGravityY(250);
+    player.setGravityY(yGravity);
 
     this.anims.create({
       key: "left",
