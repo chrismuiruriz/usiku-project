@@ -14,11 +14,19 @@ import DudeImg from "../assets/dude.png";
 import LadderImg from "../assets/objects/ladder.png";
 import BackgroundImg from "../assets/background.png";
 
-//UI
+//Utils
 import ScoreLabel from "../ui/ScoreLabel";
 import BombSpawner from "./BombSpawner";
 import AlignGrid from "../utils/AlignGrid";
 import Align from "../utils/Align";
+import EventDispatcher from "../utils/EventDispatcher";
+import GamePad from "../utils/GamePad";
+
+//Controlers
+import CrossImg from "../assets/controls/cross.png";
+import RedButtonImg from "../assets/controls/redButton.png";
+import HiddenImg from "../assets/controls/hidden.png";
+import controlBackImg from "../assets/controls/controlBack.png";
 
 //consts
 const DUDE_KEY = "dude";
@@ -44,7 +52,11 @@ class GameScene extends Phaser.Scene {
     this.ladderGroup = undefined;
 
     this.onLadder = false;
+    this.aGrid = undefined;
     this.blockGrid = undefined;
+
+    this.emitter = undefined;
+    this.playerState = "idle";
   }
 
   preload() {
@@ -62,6 +74,11 @@ class GameScene extends Phaser.Scene {
 
     this.load.image(BACKGROUND_KEY, BackgroundImg);
     this.load.image(LADDER_KEY, LadderImg);
+
+    this.load.image("cross", CrossImg);
+    this.load.image("redButton", RedButtonImg);
+    this.load.image("hidden", HiddenImg);
+    this.load.image("controlBack", controlBackImg);
   }
 
   create() {
@@ -69,6 +86,9 @@ class GameScene extends Phaser.Scene {
     //the background image
     let bg = this.add.image(0, 0, BACKGROUND_KEY).setOrigin(0, 0);
     this.align.scaleToGameW(bg, 2);
+
+    //event dispatcher
+    this.emitter = EventDispatcher.getInstance();
 
     //set the world bounds to the size of the bg image
     this.physics.world.setBounds(0, 0, bg.displayWidth, bg.displayHeight);
@@ -78,6 +98,14 @@ class GameScene extends Phaser.Scene {
 
     //let's create our hero
     this.player = this.createPlayer();
+
+    this.aGrid = new AlignGrid(this, {
+      scene: this,
+      rows: 11,
+      cols: 11,
+    });
+
+    //this.aGrid.showNumbers();
 
     //a kit to generate a grid to assist in obj alignment
     this.blockGrid = new AlignGrid(this, {
@@ -112,10 +140,12 @@ class GameScene extends Phaser.Scene {
     //make hero and ladders to overlap
     this.physics.add.overlap(this.player, this.ladderGroup);
 
+    //Controller event listeners
+    this.setListeners();
+
     //a simple score board for illustration purposes
     this.scoreLabel = this.createScoreLabel(10, 10, 0);
     this.scoreLabel.setScrollFactor(0);
-    this.align.scaleToGameW(this.scoreLabel, 0.25);
 
     // //bomb spawner
     this.bombSpawner = new BombSpawner(this, BOMB_KEY);
@@ -136,6 +166,14 @@ class GameScene extends Phaser.Scene {
 
     // //add keyboard controls
     this.cursors = this.input.keyboard.createCursorKeys();
+
+    //lets init the GamePad
+    this.gamePad = new GamePad({
+      scene: this,
+      grid: this.blockGrid,
+      align: this.align,
+    });
+    this.blockGrid.placeAtIndex(352, this.gamePad);
   }
 
   placeBlock(pos, key) {
@@ -156,7 +194,8 @@ class GameScene extends Phaser.Scene {
   }
 
   makePlats() {
-    this.makeFloor(66, 87, "grey");
+    this.makeFloor(69, 69, "brown");
+    this.makeFloor(72, 74, "brown");
     this.makeFloor(125, 128, "brown");
     this.makeFloor(135, 141, "brown");
     this.makeFloor(204, 206, "brown");
@@ -166,6 +205,7 @@ class GameScene extends Phaser.Scene {
     this.makeFloor(269, 269, "brown");
     this.makeFloor(271, 275, "brown");
     this.makeFloor(288, 288, "brown");
+    this.makeFloor(309.5, 309.5, "brown");
     this.makeFloor(310.5, 310.5, "brown");
     this.makeFloor(322, 329, "brown");
     this.makeFloor(334, 338, "brown");
@@ -207,6 +247,9 @@ class GameScene extends Phaser.Scene {
   }
 
   update() {
+    if (this.gameOver) {
+      return;
+    }
     let xVelocity = 150;
     let yVelocity = -150;
 
@@ -214,20 +257,20 @@ class GameScene extends Phaser.Scene {
       xVelocity = 250;
       yVelocity = -250;
     }
-    if (this.gameOver) {
-      return;
-    }
-    if (this.cursors.left.isDown) {
+    if (this.cursors.left.isDown || this.playerState == "left") {
       this.player.setVelocityX(xVelocity * -1);
       this.player.anims.play("left", true);
-    } else if (this.cursors.right.isDown) {
+    } else if (this.cursors.right.isDown || this.playerState == "right") {
       this.player.setVelocityX(xVelocity);
       this.player.anims.play("right", true);
+    } else if (this.playerState == "idle") {
+      this.player.setVelocityX(0);
+      this.player.anims.play("turn");
     } else {
       this.player.setVelocityX(0);
       this.player.anims.play("turn");
     }
-    if (this.cursors.up.isDown) {
+    if (this.cursors.up.isDown || this.playerState == "up") {
       this.checkLadder();
       if (this.onLadder == true) {
         this.player.setVelocityY(yVelocity);
@@ -240,10 +283,8 @@ class GameScene extends Phaser.Scene {
   //returns true if mobile device
   isMobileDevice() {
     if (navigator.userAgent.indexOf("Mobile") == -1) {
-      console.log(`is not mobile`);
       return false;
     }
-    console.log(`is mobile`);
     return true;
   }
 
@@ -255,7 +296,8 @@ class GameScene extends Phaser.Scene {
       yGravity = 250;
     }
 
-    const player = this.physics.add.sprite(50, 450, DUDE_KEY);
+    const player = this.physics.add.sprite(40, 450, DUDE_KEY);
+    window.mplayer = player;
     player.setBounce(0.1);
     player.setCollideWorldBounds(true);
 
@@ -306,8 +348,6 @@ class GameScene extends Phaser.Scene {
     star.disableBody(true, true);
 
     this.scoreLabel.add(10);
-    console.log("remaining stars", this.stars.countActive(true));
-
     if (this.stars.countActive(true) === 0) {
       this.stars.children.iterate((child) => {
         child.enableBody(true, child.x, 0, true, true);
@@ -328,19 +368,59 @@ class GameScene extends Phaser.Scene {
   }
 
   hitBomb(player, bomb) {
-    // this.physics.pause();
-    // player.setTint(0xff0000);
-    // player.anims.play("turn");
-    // this.gameOver = true;
+    this.physics.pause();
+    player.setTint(0xff0000);
+    player.anims.play("turn");
+    this.gameOver = true;
+    setTimeout(() => {
+      this.scene.restart();
+      this.gameOver = false;
+    }, 1000);
     //this.registry.destroy(); // destroy registry
     //this.events.off(); // disable all active events
-    //this.scene.restart(); // restart current scene
   }
 
-  restartScene() {
-    this.registry.destroy();
-    this.events.off();
-    this.scene.restart();
+  setListeners() {
+    this.emitter.on("CONTROL_PRESSED", this.controllPressed.bind(this));
+    this.input.on("pointerup", this.stopPlayer.bind(this));
+  }
+
+  stopPlayer() {
+    this.playerState = "idle";
+  }
+
+  controllPressed(param) {
+    let xVelocity = 150;
+    let yVelocity = -150;
+
+    if (this.isMobileDevice()) {
+      xVelocity = 250;
+      yVelocity = -250;
+    }
+
+    switch (param) {
+      case "GO_UP":
+        this.playerState = "up";
+        break;
+      case "GO_DOWN":
+        break;
+      case "GO_LEFT":
+        this.playerState = "left";
+        break;
+      case "GO_RIGHT":
+        this.playerState = "right";
+        break;
+      case "BTN1":
+        if (this.player.body.touching.down) {
+          this.playerState = "up";
+        }
+        break;
+      case "BTN2":
+        if (this.player.body.touching.down) {
+          this.playerState = "up";
+        }
+        break;
+    }
   }
 }
 

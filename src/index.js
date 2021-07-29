@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import GameScene from "./scenes/GameScene";
+import IntroScene from "./scenes/IntroScene";
 
 let isMobile = navigator.userAgent.indexOf("Mobile");
 if (isMobile == -1) {
@@ -20,11 +21,11 @@ const config = {
   physics: {
     default: "arcade",
     arcade: {
-      debug: true,
+      debug: false,
       //gravity: { y: 300 }
     },
   },
-  scene: GameScene,
+  scene: [IntroScene, GameScene],
 };
 
 const game = new Phaser.Game(config);
